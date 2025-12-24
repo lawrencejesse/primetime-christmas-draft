@@ -214,9 +214,14 @@
                 <button class="draft-action-btn" onclick="randomizeOrder()">🎲 Randomize Draft Order</button>
                 <button class="draft-action-btn secondary" onclick="resetDraft()">↺ Reset Draft</button>
                 <div class="draft-order" id="draft-order" style="display: none;">
-                    <h4>Draft Order (Snake)</h4>
-                    <div class="order-display" id="order-display"></div>
+                    <h4>Draft Picks (1-8)</h4>
+                    <div id="draft-picks-display" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; margin-top: 1rem;"></div>
                 </div>
+            </div>
+            <div class="draft-controls" id="auction-section" style="display: none; margin-top: 1rem;">
+                <h3>🔨 Auction - Remaining Colts</h3>
+                <p style="margin-bottom: 1rem; color: var(--leather-brown);">$2 increments. Buyer chooses from remaining colts and can take as many as wanted.</p>
+                <div id="auction-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem;"></div>
             </div>
             <div class="sire-section">
                 <div class="sire-header"><h2>Available: Sire 114</h2></div>
@@ -455,6 +460,8 @@
             return names;
         }
         
+        let auctionBids = {};
+        
         function randomizeOrder() {
             participants = getParticipants();
             if (participants.length < 2) { alert('Enter at least 2 names first!'); return; }
@@ -462,8 +469,7 @@
                 const j = Math.floor(Math.random() * (i + 1));
                 [participants[i], participants[j]] = [participants[j], participants[i]];
             }
-            draftOrder = [...participants, ...participants.slice().reverse()];
-            draftOrder = draftOrder.slice(0, colts.length);
+            draftOrder = participants.slice(0, 8);
             currentPick = 0;
             renderDraftOrder();
             saveState();
@@ -471,23 +477,70 @@
         
         function renderDraftOrder() {
             const container = document.getElementById('draft-order');
-            const display = document.getElementById('order-display');
+            const display = document.getElementById('draft-picks-display');
             container.style.display = 'block';
             display.innerHTML = draftOrder.map((name, i) => {
-                let className = 'order-pick';
-                if (i < currentPick) className += ' completed';
-                if (i === currentPick) className += ' current';
-                return `<span class="${className}">${i + 1}. ${name}</span>`;
+                const pickNum = i + 1;
+                const selectedColt = Object.entries(draftedColts).find(([brand, owner]) => owner === name && !auctionBids[brand]);
+                const coltDisplay = selectedColt ? selectedColt[0] : '---';
+                const isCurrent = i === currentPick && !selectedColt;
+                const isCompleted = selectedColt !== undefined;
+                return `<div style="background: ${isCurrent ? 'var(--gold-accent)' : isCompleted ? 'var(--sage)' : 'var(--barn-red)'}; color: ${isCurrent ? 'var(--dark-wood)' : 'var(--cream)'}; padding: 0.75rem; border-radius: 4px;">
+                    <div style="font-weight: 700;">Pick ${pickNum}: ${name}</div>
+                    <div style="font-family: 'Rye', cursive; font-size: 1.2rem; margin-top: 0.25rem;">${coltDisplay}</div>
+                </div>`;
             }).join('');
+            renderAuctionSection();
+        }
+        
+        function renderAuctionSection() {
+            const remaining = colts.filter(c => !draftedColts[c.brand]);
+            const auctionSection = document.getElementById('auction-section');
+            const auctionList = document.getElementById('auction-list');
+            
+            if (currentPick >= draftOrder.length || draftOrder.length === 0) {
+                if (remaining.length > 0 || Object.keys(auctionBids).length > 0) {
+                    auctionSection.style.display = 'block';
+                    const auctionedColts = Object.entries(auctionBids);
+                    auctionList.innerHTML = remaining.map(colt => `
+                        <div style="background: var(--cream); border: 2px solid var(--leather-brown); padding: 1rem; border-radius: 4px;">
+                            <div style="font-family: 'Rye', cursive; font-size: 1.2rem; color: var(--barn-red);">${colt.brand}</div>
+                            <div style="font-size: 0.85rem; color: var(--leather-brown); margin: 0.5rem 0;">${colt.sex} by ${colt.sire}</div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                                <input type="text" id="auction-buyer-${colt.brand}" placeholder="Buyer" style="flex: 1; min-width: 80px; padding: 0.5rem; border: 2px solid var(--leather-brown); border-radius: 2px;">
+                                <input type="number" id="auction-bid-${colt.brand}" placeholder="$" min="2" step="2" style="width: 60px; padding: 0.5rem; border: 2px solid var(--leather-brown); border-radius: 2px;">
+                                <button class="draft-action-btn" style="margin: 0; padding: 0.5rem 1rem;" onclick="recordAuctionBid('${colt.brand}')">Sold</button>
+                            </div>
+                        </div>
+                    `).join('') + auctionedColts.map(([brand, data]) => `
+                        <div style="background: var(--sage); color: var(--cream); padding: 1rem; border-radius: 4px;">
+                            <div style="font-family: 'Rye', cursive; font-size: 1.2rem;">${brand}</div>
+                            <div style="margin-top: 0.5rem;">Sold to <strong>${data.buyer}</strong> for <strong>$${data.bid}</strong></div>
+                        </div>
+                    `).join('');
+                } else {
+                    auctionSection.style.display = 'none';
+                }
+            } else {
+                auctionSection.style.display = 'none';
+            }
+        }
+        
+        function recordAuctionBid(brand) {
+            const buyerInput = document.getElementById(`auction-buyer-${brand}`);
+            const bidInput = document.getElementById(`auction-bid-${brand}`);
+            const buyer = buyerInput.value.trim();
+            const bid = parseInt(bidInput.value) || 0;
+            if (!buyer) { alert('Enter buyer name'); return; }
+            if (bid < 2) { alert('Minimum bid is $2'); return; }
+            auctionBids[brand] = { buyer, bid };
+            draftedColts[brand] = buyer;
+            renderDraftGrid(); renderColtsGrid(); renderAuctionSection(); saveState();
         }
         
         function draftColt(brand) {
             if (currentPick >= draftOrder.length) {
-                const winner = prompt(`Auction! Who won ${brand}?`);
-                if (winner && winner.trim()) {
-                    draftedColts[brand] = winner.trim();
-                    renderDraftGrid(); renderColtsGrid(); saveState();
-                }
+                alert('Draft complete! Use the auction section above to sell remaining colts.');
                 return;
             }
             const drafter = draftOrder[currentPick];
@@ -496,14 +549,15 @@
             renderDraftGrid(); renderDraftOrder(); renderColtsGrid(); saveState();
             if (currentPick >= draftOrder.length) {
                 const remaining = colts.filter(c => !draftedColts[c.brand]).map(c => c.brand);
-                if (remaining.length > 0) alert(`Snake draft complete! Remaining colts for auction: ${remaining.join(', ')}`);
+                if (remaining.length > 0) alert(`Draft complete! ${remaining.length} colts available for auction: ${remaining.join(', ')}`);
             }
         }
         
         function resetDraft() {
             if (!confirm('Reset the entire draft?')) return;
-            draftedColts = {}; currentPick = 0; draftOrder = []; scores = {};
+            draftedColts = {}; currentPick = 0; draftOrder = []; scores = {}; auctionBids = {};
             document.getElementById('draft-order').style.display = 'none';
+            document.getElementById('auction-section').style.display = 'none';
             renderDraftGrid(); renderColtsGrid(); renderColtSelector(); saveState();
         }
         
@@ -555,7 +609,7 @@
         }
         
         function saveState() {
-            const state = { participants, draftOrder, currentPick, draftedColts, scores, participantInputs: [] };
+            const state = { participants, draftOrder, currentPick, draftedColts, scores, auctionBids, participantInputs: [] };
             for (let i = 1; i <= 8; i++) state.participantInputs.push(document.getElementById(`p${i}`).value);
             localStorage.setItem('primeTimeDraft2025', JSON.stringify(state));
         }
@@ -570,6 +624,7 @@
                 currentPick = state.currentPick || 0;
                 draftedColts = state.draftedColts || {};
                 scores = state.scores || {};
+                auctionBids = state.auctionBids || {};
                 if (state.participantInputs) state.participantInputs.forEach((val, i) => { const input = document.getElementById(`p${i + 1}`); if (input) input.value = val; });
                 if (draftOrder.length > 0) renderDraftOrder();
                 renderDraftGrid(); renderColtsGrid(); renderColtSelector(); updateLeaderboard();
