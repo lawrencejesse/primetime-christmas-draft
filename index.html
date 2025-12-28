@@ -611,14 +611,18 @@
         function saveState() {
             const state = { participants, draftOrder, currentPick, draftedColts, scores, auctionBids, participantInputs: [] };
             for (let i = 1; i <= 8; i++) state.participantInputs.push(document.getElementById(`p${i}`).value);
-            localStorage.setItem('primeTimeDraft2025', JSON.stringify(state));
+            fetch('/api/state', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(state)
+            }).catch(e => console.error('Failed to save state', e));
         }
         
-        function loadState() {
-            const saved = localStorage.getItem('primeTimeDraft2025');
-            if (!saved) return;
+        async function loadState() {
             try {
-                const state = JSON.parse(saved);
+                const response = await fetch('/api/state');
+                const state = await response.json();
+                if (!state || Object.keys(state).length === 0) return;
                 participants = state.participants || [];
                 draftOrder = state.draftOrder || [];
                 currentPick = state.currentPick || 0;
