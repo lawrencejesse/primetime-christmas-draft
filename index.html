@@ -143,6 +143,7 @@
         <button data-section="draft">Draft Board</button>
         <button data-section="scoring">Scoring</button>
         <button data-section="standings">Standings</button>
+        <button data-section="money">Money</button>
     </nav>
     
     <main>
@@ -257,6 +258,42 @@
                 <thead><tr><th>Rank</th><th>Drafter</th><th>Total</th><th>Colts (Scores)</th></tr></thead>
                 <tbody id="leaderboard-body"><tr><td colspan="4" style="text-align: center; color: var(--leather-brown);">Complete some scoring first!</td></tr></tbody>
             </table>
+        </section>
+        
+        <section id="money" class="section">
+            <h2 style="font-family: 'Rye', cursive; color: var(--barn-red); margin-bottom: 1.5rem;">💰 Money Tracker</h2>
+            
+            <div class="rules-card" style="margin-bottom: 1.5rem;">
+                <h3 style="font-family: 'Rye', cursive; color: var(--barn-red); margin-bottom: 1rem;">Buy-In Payments ($20 each)</h3>
+                <div id="payments-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem;"></div>
+            </div>
+            
+            <div class="rules-card" style="margin-bottom: 1.5rem;">
+                <h3 style="font-family: 'Rye', cursive; color: var(--barn-red); margin-bottom: 1rem;">Auction Sales</h3>
+                <div id="auction-sales-list"></div>
+            </div>
+            
+            <div class="rules-card" style="background: var(--dark-wood); color: var(--cream);">
+                <h3 style="font-family: 'Rye', cursive; color: var(--gold-accent); margin-bottom: 1rem;">Total Pot</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; text-align: center;">
+                    <div>
+                        <div style="font-size: 0.9rem; opacity: 0.8;">Buy-Ins</div>
+                        <div id="total-buyins" style="font-family: 'Rye', cursive; font-size: 2rem; color: var(--gold-accent);">$0</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.9rem; opacity: 0.8;">Auction</div>
+                        <div id="total-auction" style="font-family: 'Rye', cursive; font-size: 2rem; color: var(--gold-accent);">$0</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.9rem; opacity: 0.8;">Grand Total</div>
+                        <div id="total-pot" style="font-family: 'Rye', cursive; font-size: 2.5rem; color: var(--gold-accent);">$0</div>
+                    </div>
+                </div>
+                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 2px solid var(--gold-accent);">
+                    <h4 style="color: var(--gold-accent); margin-bottom: 0.5rem;">Estimated Payouts</h4>
+                    <div id="payout-breakdown" style="display: flex; gap: 1.5rem; flex-wrap: wrap;"></div>
+                </div>
+            </div>
         </section>
     </main>
     
@@ -373,6 +410,7 @@
         let draftedColts = {};
         let scores = {};
         let currentScoringColt = null;
+        let payments = {};
         
         document.addEventListener('DOMContentLoaded', () => {
             renderColtsGrid();
@@ -555,10 +593,10 @@
         
         function resetDraft() {
             if (!confirm('Reset the entire draft?')) return;
-            draftedColts = {}; currentPick = 0; draftOrder = []; scores = {}; auctionBids = {};
+            draftedColts = {}; currentPick = 0; draftOrder = []; scores = {}; auctionBids = {}; payments = {};
             document.getElementById('draft-order').style.display = 'none';
             document.getElementById('auction-section').style.display = 'none';
-            renderDraftGrid(); renderColtsGrid(); renderColtSelector(); saveState();
+            renderDraftGrid(); renderColtsGrid(); renderColtSelector(); renderMoneySection(); saveState();
         }
         
         function selectColtForScoring(brand) {
@@ -608,8 +646,67 @@
             `).join('');
         }
         
+        function togglePayment(name) {
+            if (payments[name]) {
+                delete payments[name];
+            } else {
+                payments[name] = 20;
+            }
+            renderMoneySection();
+            saveState();
+        }
+        
+        function renderMoneySection() {
+            const allNames = [...new Set([...draftOrder, ...Object.values(draftedColts)])].filter(n => n);
+            const paymentsList = document.getElementById('payments-list');
+            
+            if (allNames.length === 0) {
+                paymentsList.innerHTML = '<p style="color: var(--leather-brown);">Enter participants in Draft Board first</p>';
+            } else {
+                paymentsList.innerHTML = allNames.map(name => {
+                    const paid = payments[name];
+                    return `<div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: ${paid ? 'var(--sage)' : 'var(--cream)'}; color: ${paid ? 'var(--cream)' : 'var(--dark-wood)'}; border: 2px solid ${paid ? 'var(--sage)' : 'var(--leather-brown)'}; border-radius: 4px; cursor: pointer;" onclick="togglePayment('${name}')">
+                        <span style="font-size: 1.2rem;">${paid ? '✓' : '○'}</span>
+                        <span style="font-weight: 600;">${name}</span>
+                        <span style="margin-left: auto;">$20</span>
+                    </div>`;
+                }).join('');
+            }
+            
+            const auctionList = document.getElementById('auction-sales-list');
+            const auctionEntries = Object.entries(auctionBids);
+            if (auctionEntries.length === 0) {
+                auctionList.innerHTML = '<p style="color: var(--leather-brown);">No auction sales yet</p>';
+            } else {
+                auctionList.innerHTML = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;">' + 
+                    auctionEntries.map(([brand, data]) => `
+                        <div style="padding: 0.75rem; background: var(--aged-paper); border-radius: 4px;">
+                            <div style="font-family: 'Rye', cursive; color: var(--barn-red);">${brand}</div>
+                            <div style="font-size: 0.9rem;">${data.buyer} - <strong>$${data.bid}</strong></div>
+                        </div>
+                    `).join('') + '</div>';
+            }
+            
+            const buyInTotal = Object.values(payments).reduce((sum, val) => sum + val, 0);
+            const auctionTotal = auctionEntries.reduce((sum, [_, data]) => sum + data.bid, 0);
+            const grandTotal = buyInTotal + auctionTotal;
+            
+            document.getElementById('total-buyins').textContent = '$' + buyInTotal;
+            document.getElementById('total-auction').textContent = '$' + auctionTotal;
+            document.getElementById('total-pot').textContent = '$' + grandTotal;
+            
+            const first = Math.round(grandTotal * 0.6);
+            const second = Math.round(grandTotal * 0.3);
+            const third = grandTotal - first - second;
+            document.getElementById('payout-breakdown').innerHTML = `
+                <div><span style="font-size: 1.2rem;">🥇</span> 1st: <strong>$${first}</strong></div>
+                <div><span style="font-size: 1.2rem;">🥈</span> 2nd: <strong>$${second}</strong></div>
+                <div><span style="font-size: 1.2rem;">🥉</span> 3rd: <strong>$${third}</strong></div>
+            `;
+        }
+        
         function saveState() {
-            const state = { participants, draftOrder, currentPick, draftedColts, scores, auctionBids, participantInputs: [] };
+            const state = { participants, draftOrder, currentPick, draftedColts, scores, auctionBids, payments, participantInputs: [] };
             for (let i = 1; i <= 8; i++) state.participantInputs.push(document.getElementById(`p${i}`).value);
             fetch('/api/state', {
                 method: 'POST',
@@ -629,9 +726,10 @@
                 draftedColts = state.draftedColts || {};
                 scores = state.scores || {};
                 auctionBids = state.auctionBids || {};
+                payments = state.payments || {};
                 if (state.participantInputs) state.participantInputs.forEach((val, i) => { const input = document.getElementById(`p${i + 1}`); if (input) input.value = val; });
                 if (draftOrder.length > 0) renderDraftOrder();
-                renderDraftGrid(); renderColtsGrid(); renderColtSelector(); updateLeaderboard();
+                renderDraftGrid(); renderColtsGrid(); renderColtSelector(); updateLeaderboard(); renderMoneySection();
             } catch (e) { console.error('Failed to load state', e); }
         }
         

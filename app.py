@@ -54,7 +54,8 @@ def get_state():
             'draftedColts': json.loads(row['drafted_colts']),
             'scores': json.loads(row['scores']),
             'auctionBids': json.loads(row['auction_bids']),
-            'participantInputs': json.loads(row['participant_inputs'])
+            'participantInputs': json.loads(row['participant_inputs']),
+            'payments': json.loads(row['payments']) if row.get('payments') else {}
         })
     return jsonify({})
 
@@ -71,7 +72,8 @@ def save_state():
             drafted_colts = %s,
             scores = %s,
             auction_bids = %s,
-            participant_inputs = %s
+            participant_inputs = %s,
+            payments = %s
         WHERE id = 1
     ''', (
         json.dumps(data.get('participants', [])),
@@ -80,7 +82,8 @@ def save_state():
         json.dumps(data.get('draftedColts', {})),
         json.dumps(data.get('scores', {})),
         json.dumps(data.get('auctionBids', {})),
-        json.dumps(data.get('participantInputs', []))
+        json.dumps(data.get('participantInputs', [])),
+        json.dumps(data.get('payments', {}))
     ))
     conn.commit()
     cur.close()
